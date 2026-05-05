@@ -5,6 +5,7 @@ import matplotlib.pyplot as pyplot
 import sklearn.linear_model
 import sklearn.metrics
 import graphviz
+import timeit
 
 rng = numpy.random.default_rng(seed=0)
 
@@ -383,7 +384,10 @@ if __name__ == "__main__":
     print(my_test_df.shape)
 
     tr = DecisionTree(my_train_df, my_test_df, max_depth=10)
-    tr.train()
+
+    training_time = timeit.timeit(tr.train, number=1)
+
+    print(training_time)
 
     tree_file_prefix = "tree"
     tr.tree.to_graphviz(tree_file_prefix + ".dot")
