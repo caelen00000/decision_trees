@@ -4,6 +4,7 @@ from treelib import Node, Tree
 import matplotlib.pyplot as pyplot
 import sklearn.linear_model
 import sklearn.metrics
+import graphviz
 
 rng = numpy.random.default_rng(seed=0)
 
@@ -342,7 +343,23 @@ class Perceptron(Classifier):
 class RandomForest(Classifier):
     pass
 
-if __name__=="__main__":
+def subsample(df, keep_proportion):
+    return df.loc[df.index[0:int(len(df.index) * keep_proportion)]]
+
+def train_test_split(df: pandas.DataFrame, test_proportion, label_col= "Kingdom"):
+    labels = df[label_col].cat.codes
+    
+    test_indices = rng.choice(labels.index,
+                              size=int(len(labels.index) * test_proportion),
+                              replace=False,
+                              shuffle=True)  # TODO: relying on shuffle to hopefully run into rare classes during training, need to implement stratified or remove rare classes
+
+    train_df = df.drop(index=test_indices)
+    test_df = df.loc[test_indices]
+    
+    return train_df, test_df
+
+if __name__ == "__main__":
     codon_usage = get_codon_usage_df()
 
     # TODO: perhaps keep mitochondrial?
@@ -350,26 +367,25 @@ if __name__=="__main__":
     #codon_usage = codon_usage.loc[codon_usage["DNAtype"] == "genomic"]
     #del codon_usage["DNAtype"]
 
-    labels = codon_usage["Kingdom"].cat.codes
+    # full dataset
+    #my_train_df, my_test_df = train_test_split(codon_usage, test_proportion=0.1)
 
-    test_size = 0.1
+    # subsample for testing
+    my_train_df, my_test_df = train_test_split(subsample(codon_usage, keep_proportion = 0.2), test_proportion=0.1)
 
-    test_indices = rng.choice(labels.index,
-                              size = int(len(labels.index) * test_size),
-                              replace = False,
-                              shuffle = True) #TODO: relying on shuffle to hopefully run into rare classes during training, need to implement stratified or remove rare classes
+    print(my_train_df.shape)
+    print(my_test_df.shape)
 
-
-    my_test_df = codon_usage#.loc[test_indices]
-    my_train_df = codon_usage#.drop(index=test_indices)
-
-    
     tr = DecisionTree(my_train_df, my_test_df)
     tr.train()
 
-    tr.tree.show()
-    tr.tree.to_graphviz("tree.dot")
+    tree_file_prefix = "tree"
+    tr.tree.to_graphviz(tree_file_prefix + ".dot")
 
+    tr.tree.show()
+
+    graphviz_graph = graphviz.Source.from_file(tree_file_prefix + ".dot")
+    graphviz_graph.render(tree_file_prefix, format="png", cleanup=True)
 
     """
     my_test_df = codon_usage.loc[test_indices]
