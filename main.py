@@ -1,7 +1,9 @@
-import numpy as np
-import pandas
 import numpy
+import pandas
+from treelib import Node, Tree
 import matplotlib.pyplot as pyplot
+import sklearn.linear_model
+import sklearn.metrics
 
 rng = numpy.random.default_rng(seed=0)
 
@@ -185,8 +187,6 @@ class Classifier:
 
         self.n_classes = train_df[label_col].cat.codes.nunique()
         self.n_features = train_df.shape[1] - first_feature_col_index
-
-from treelib import Node, Tree
 
 class TreeData:
     def __init__(self, df, feature_sorted_dict, test_attribute = None, test_cutoff = None, is_leaf = False, label_col = "Kingdom"):
@@ -405,8 +405,7 @@ if __name__=="__main__":
     #print(my_test_df)
     #print(my_train_df)
 
-    import sklearn.linear_model
-    import sklearn.metrics
+    
 
     perceptron2 = sklearn.linear_model.Perceptron()
     perceptron2.fit(perc.x_train, perc.y_train)
