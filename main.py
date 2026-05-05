@@ -191,17 +191,35 @@ class Classifier:
         self.n_features = train_df.shape[1] - first_feature_col_index
 
 class TreeData:
-    def __init__(self, df, feature_sorted_dict, test_attribute = None, test_cutoff = None, is_leaf = False, label_col = "Kingdom"):
+    def __init__(self,
+                 df,
+                 feature_sorted_dict,
+                 in_feature = None,
+                 out_feature = None,
+                 in_inequality = None,
+                 in_cutoff = None,
+                 leaf_class = None,
+                 test_cutoff = None,
+                 lower_child_id = None,
+                 upper_child_id = None,
+                 label_col = "Kingdom"):
         self.df = df
         self.feature_sorted_dict = feature_sorted_dict
         self.cases = df.shape[0]
         self.classes = df[label_col].unique()
         self.label_col = label_col
 
-        self.test_attribute = test_attribute
+        self.in_feature = in_feature
+        self.out_feature = out_feature
+        self.in_inequality = in_inequality
+        self.in_cutoff = in_cutoff
+        self.leaf_class = leaf_class
+
+        self.lower_child_id = lower_child_id
+        self.upper_child_id = upper_child_id
+
         self.test_cutoff = test_cutoff
         self.gain_ratio = None
-        self.is_leaf = is_leaf
 
 class DecisionTree(Classifier):
     def __init__(self,
@@ -225,46 +243,79 @@ class DecisionTree(Classifier):
         self.tree_id = "tree"
         self.tree = Tree(identifier=self.tree_id)
 
-        self.tree.create_node(identifier="root",
-                              data=TreeData(self.train_df, _feature_sorted_dict))
+        self.tree.create_node(data=TreeData(self.train_df,
+                                            _feature_sorted_dict,
+                                            in_feature="root",
+                                            in_inequality="N/A",
+                                            in_cutoff="N/A"))
 
     def train(self):
+        def add_leaf(node):
+            self.tree[node].data.out_feature = "leaf"
+
+            # takes the first mode if there are multiple
+            # can this be done without accessing private _mode?
+            #TODO: actually, this doesn't make sense, as self.tree[node].data.classes = df[label_col].unique(), maybe use df[label_col].value_counts()[0, 1]?
+            #self.tree[node].data.leaf_class = self.tree[node].data.classes._mode()[0]
+
+            value_counts = self.tree[node].data.df[self.tree[node].data.label_col].value_counts(sort=False)
+
+            self.tree[node].data.leaf_class = value_counts.idxmax()
+
+            self.tree[node].tag = (self.tree[node].data.label_col + ": " + self.tree[node].data.leaf_class +
+                                   "\nvc: " + str(value_counts))
+
         def build_tree(subtree_root):
             if self.max_depth is not None and self.tree.depth(self.tree[subtree_root]) == self.max_depth:
+                add_leaf(subtree_root)
+
                 return
 
-            current_treedata = self.tree[subtree_root].data
-
-            #if current_treedata.cases == 0:
-            if current_treedata.cases < 4:
-                current_treedata.is_leaf = True
-
-                #TODO: mode() assumes classes is a series, and there can be multiple modes, so the first is taken
-                #current_treedata.classes = self.tree[self.tree[subtree_root].predecessor(self.tree_id)].data.classes.mode()[0]
+            #if self.tree[subtree_root].data.cases == 0:
+            if self.tree[subtree_root].data.cases < 4: # 4 = min_split_size * 2, not sure if this correct
+                add_leaf(subtree_root)
             else:
-                if len(current_treedata.classes) == 1:
-                    current_treedata.is_leaf = True
+                if len(self.tree[subtree_root].data.classes) == 1:
+                    add_leaf(subtree_root)
                 else:
-                    print(current_treedata.df.shape)
+                    print(self.tree[subtree_root].data.df.shape)
 
                     max_gain_ratio_lower_split, max_gain_ratio_upper_split, feature_sorted_dict_lower_split, feature_sorted_dict_upper_split, max_gain_ratio_split_threshold, max_gain_ratio_feature, max_gain_ratio = split_df(
-                        current_treedata.df, current_treedata.feature_sorted_dict, self.label_col)
+                        self.tree[subtree_root].data.df, self.tree[subtree_root].data.feature_sorted_dict, self.label_col)
 
-                    self.tree[subtree_root].data.test_attribute = max_gain_ratio_feature
+                    self.tree[subtree_root].data.out_feature = max_gain_ratio_feature
                     self.tree[subtree_root].data.test_cutoff = max_gain_ratio_split_threshold
                     self.tree[subtree_root].data.gain_ratio = max_gain_ratio
+                    self.tree[subtree_root].tag = ("in test: " + self.tree[subtree_root].data.in_feature + " " + self.tree[subtree_root].data.in_inequality + " " + str(self.tree[subtree_root].data.in_cutoff) +
+                                                   "\nout test: " + self.tree[subtree_root].data.out_feature + " vs " + str(self.tree[subtree_root].data.test_cutoff) +
+                                                   "\ngain ratio: " + str(self.tree[subtree_root].data.gain_ratio) +
+                                                   "\nvc: " + str(self.tree[subtree_root].data.df[self.tree[subtree_root].data.label_col].value_counts(sort=False)))
+
+
 
                     print(max_gain_ratio_feature + " " + str(max_gain_ratio))
 
-                    lower_split_id = max_gain_ratio_feature + " <= " + str(max_gain_ratio_split_threshold)
-                    build_tree(self.tree.create_node(tag=lower_split_id,
-                                          data=TreeData(max_gain_ratio_lower_split, feature_sorted_dict_lower_split),
-                                          parent=subtree_root).identifier)
+                    lower_split_id = self.tree.create_node(data=TreeData(max_gain_ratio_lower_split,
+                                                                   feature_sorted_dict_lower_split,
+                                                                   in_feature=self.tree[subtree_root].data.out_feature,
+                                                                   in_inequality="<=",
+                                                                   in_cutoff=self.tree[subtree_root].data.test_cutoff),
+                                                     parent=subtree_root).identifier
 
-                    upper_split_id = max_gain_ratio_feature + " > " + str(max_gain_ratio_split_threshold)
-                    build_tree(self.tree.create_node(tag=upper_split_id,
-                                          data=TreeData(max_gain_ratio_upper_split, feature_sorted_dict_upper_split),
-                                          parent=subtree_root).identifier)
+                    self.tree[subtree_root].data.lower_child_id = lower_split_id
+
+                    build_tree(lower_split_id)
+
+                    upper_split_id = self.tree.create_node(data=TreeData(max_gain_ratio_upper_split,
+                                                                   feature_sorted_dict_upper_split,
+                                                                   in_feature=self.tree[subtree_root].data.out_feature,
+                                                                   in_inequality=">",
+                                                                   in_cutoff=self.tree[subtree_root].data.test_cutoff),
+                                                     parent=subtree_root).identifier
+
+                    self.tree[subtree_root].data.upper_child_id = upper_split_id
+
+                    build_tree(upper_split_id)
 
         build_tree(self.tree.root)
 
