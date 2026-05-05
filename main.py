@@ -207,7 +207,8 @@ class DecisionTree(Classifier):
                  train_df,
                  test_df,
                  label_col="Kingdom",
-                 first_feature_col_index=3):
+                 first_feature_col_index=3,
+                 max_depth: int | None = None):
 
         super().__init__(train_df, test_df, label_col, first_feature_col_index)
 
@@ -218,6 +219,8 @@ class DecisionTree(Classifier):
         for feat in feature_columns:
             _feature_sorted_dict[feat] = train_df.loc[:, [label_col, feat]].sort_values(feat).rename(columns={feat: "feature"})
 
+        self.max_depth = max_depth
+
         self.tree_id = "tree"
         self.tree = Tree(identifier=self.tree_id)
 
@@ -226,6 +229,9 @@ class DecisionTree(Classifier):
 
     def train(self):
         def build_tree(subtree_root):
+            if self.max_depth is not None and self.tree.depth(self.tree[subtree_root]) == self.max_depth:
+                return
+
             current_treedata = self.tree[subtree_root].data
 
             #if current_treedata.cases == 0:
@@ -371,18 +377,16 @@ if __name__ == "__main__":
     #my_train_df, my_test_df = train_test_split(codon_usage, test_proportion=0.1)
 
     # subsample for testing
-    my_train_df, my_test_df = train_test_split(subsample(codon_usage, keep_proportion = 0.2), test_proportion=0.1)
+    my_train_df, my_test_df = train_test_split(subsample(codon_usage, keep_proportion = 1), test_proportion=0.1)
 
     print(my_train_df.shape)
     print(my_test_df.shape)
 
-    tr = DecisionTree(my_train_df, my_test_df)
+    tr = DecisionTree(my_train_df, my_test_df, max_depth=10)
     tr.train()
 
     tree_file_prefix = "tree"
     tr.tree.to_graphviz(tree_file_prefix + ".dot")
-
-    tr.tree.show()
 
     graphviz_graph = graphviz.Source.from_file(tree_file_prefix + ".dot")
     graphviz_graph.render(tree_file_prefix, format="png", cleanup=True)
