@@ -28,7 +28,23 @@ def get_codon_usage_df():
                                   | (codon_usage["Kingdom"] == "inv")
                                   | (codon_usage["Kingdom"] == "vrt")]"""
 
+    # from the Kaggle page
+    kingdom_map = {
+        "bct": "bacteria",
+        "inv": "invertebrates",
+        "mam": "mammals",
+        "pln": "plants",
+        "pri": "primates",
+        "rod": "rodents",
+        "vrt": "vertebrates",
+        "plm": "bacterial plasmids",
+        "arc": "archea",
+        "phg": "bacteriophage"
+    }
+
+    codon_usage["Kingdom"] = codon_usage["Kingdom"].replace(kingdom_map)
     codon_usage["Kingdom"] = codon_usage["Kingdom"].astype('category')
+
     codon_usage["SpeciesName"] = codon_usage["SpeciesName"].astype('category')
 
     # from the Kaggle page
