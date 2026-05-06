@@ -231,6 +231,7 @@ class DecisionTree(Classifier):
 
         super().__init__(train_df, test_df, label_col, first_feature_col_index)
 
+        self.first_feature_col_index = first_feature_col_index
         feature_columns = train_df.iloc[:, first_feature_col_index:].columns
 
         _feature_sorted_dict = {}
@@ -248,6 +249,29 @@ class DecisionTree(Classifier):
                                             in_feature="root",
                                             in_inequality="N/A",
                                             in_cutoff="N/A"))
+
+    def classify(self, x: pandas.DataFrame):
+        x = x.iloc[:, self.first_feature_col_index:]
+
+        result = []
+
+        for _, case in x.iterrows():
+            current_node = self.tree.root
+
+            while True:
+                if self.tree[current_node].data.leaf_class is None:
+                    if case[self.tree[current_node].data.out_feature] <= self.tree[current_node].data.test_cutoff:
+                        current_node = self.tree[current_node].data.lower_child_id
+                    else:
+                        current_node = self.tree[current_node].data.upper_child_id
+                else:
+                    result.append(self.tree[current_node].data.leaf_class)
+                    break
+
+        return pandas.Series(result, index=x.index)
+
+    def get_accuracy(self, x: pandas.DataFrame, y: pandas.Series):
+        return sum(self.classify(x) == y) / len(y)
 
     def train(self):
         def add_leaf(node):
@@ -434,11 +458,16 @@ if __name__ == "__main__":
     print(my_train_df.shape)
     print(my_test_df.shape)
 
-    tr = DecisionTree(my_train_df, my_test_df, max_depth=10)
+    tr = DecisionTree(my_train_df, my_test_df, max_depth=None)
 
     training_time = timeit.timeit(tr.train, number=1)
 
     print(training_time)
+
+    print(tr.classify(my_train_df).value_counts())
+    print(my_train_df["Kingdom"].value_counts())
+    print(tr.get_accuracy(my_train_df, my_train_df["Kingdom"]))
+    print(tr.get_accuracy(my_test_df, my_test_df["Kingdom"]))
 
     tree_file_prefix = "tree"
     tr.tree.to_graphviz(tree_file_prefix + ".dot")
